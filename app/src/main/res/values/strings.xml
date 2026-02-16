@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">LazyWarrior</string>
+    <string-array name="objects">
+        <item>1</item>
+        <item>14</item>
+        <item>16</item>
+        <item>19</item>
+        <item>25</item>
+        <item>27</item>
+        <item>41</item>
+        <item>47</item>
+        <item>49</item>
+        <item>57</item>
+        <item>78</item>
+        <item>ПП</item>
+        <item>ФОРТЕЦЯ</item>
+    </string-array>
+</resources>
