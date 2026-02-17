@@ -27,6 +27,13 @@ import com.example.lazywarrior.workers.ForegroundService
 import java.time.LocalDateTime
 import android.net.Uri
 import android.provider.Settings
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import com.example.lazywarrior.workers.SheetsWorker
+import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : AppCompatActivity() {
@@ -158,8 +165,20 @@ class MainActivity : AppCompatActivity() {
             startButton.isEnabled = false
             stopButton.isEnabled = true
 
-            val serviceIntent = Intent(this, ForegroundService::class.java)
-            applicationContext.startForegroundService(serviceIntent)
+            val firstRun = OneTimeWorkRequestBuilder<SheetsWorker>()
+                .setConstraints(
+                    Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build())
+                .build()
+
+            WorkManager.getInstance(this).enqueueUniqueWork(
+                "LazyWarriorWorker",
+                ExistingWorkPolicy.KEEP,
+                firstRun)
+
+//            val serviceIntent = Intent(this, ForegroundService::class.java)
+//            applicationContext.startForegroundService(serviceIntent)
         }
         startButton.isEnabled = if (status == null) true else if (!status.isRunning) true else false
 
@@ -172,8 +191,11 @@ class MainActivity : AppCompatActivity() {
             objectNumberAtColumn.isEnabled = true
             startButton.isEnabled = true
             stopButton.isEnabled = false
-            val serviceIntent = Intent(this, ForegroundService::class.java)
-            stopService(serviceIntent)
+
+            WorkManager.getInstance(this).cancelUniqueWork("LazyWarriorWorker")
+
+//            val serviceIntent = Intent(this, ForegroundService::class.java)
+//            stopService(serviceIntent)
         }
         stopButton.isEnabled = if (status == null) false else if (!status.isRunning) false else true
     }

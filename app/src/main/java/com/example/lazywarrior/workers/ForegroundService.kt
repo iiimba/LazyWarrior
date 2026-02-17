@@ -53,6 +53,7 @@ class ForegroundService : LifecycleService() {
 
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
         createNotificationChannel()
 
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -71,6 +72,7 @@ class ForegroundService : LifecycleService() {
     }
 
     override fun onBind(intent: Intent): IBinder? {
+        super.onBind(intent)
         return null // Not a bound service
     }
 
@@ -86,6 +88,7 @@ class ForegroundService : LifecycleService() {
         }
     }
 
+    @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     override fun onDestroy() {
         super.onDestroy()
         if (::wakeLock.isInitialized && wakeLock.isHeld) {
@@ -180,7 +183,7 @@ class ForegroundService : LifecycleService() {
 
                     val color = container.processingStatusesRepository.getProcessingStatusColor()
                     val colorValue = color ?: Colors.White.toString()
-                    var objectNumberColumnIndex = findObjectNumberColumnIndex(data.body()!!.values, hourToUpdate)
+                    var objectNumberColumnIndex = findObjectNumberColumnIndex(data.body()!!.values, hourToUpdate, processingStatus.changeAtMinutes)
                     if (objectNumberColumnIndex != null) {
                         updateCellBackgroundColor(
                             gSService,
@@ -195,7 +198,7 @@ class ForegroundService : LifecycleService() {
                             "Updated time: $hourToUpdate:00, color: $colorValue",
                             applicationContext)
                     } else {
-                        objectNumberColumnIndex = findObjectNumberColumnIndex(data.body()!!.values, hourToUpdate - 1)
+                        objectNumberColumnIndex = findObjectNumberColumnIndex(data.body()!!.values, hourToUpdate - 1, processingStatus.changeAtMinutes)
                         if (objectNumberColumnIndex == null) {
                             makeStatusNotification(
                                 "$hourToUpdate hours not found.",
@@ -224,7 +227,7 @@ class ForegroundService : LifecycleService() {
                         }
 
                         makeStatusNotification(
-                            "Updated time: $hourToUpdate:$processingStatus.changeAtMinutes.toString().padStart(2, '0'), color: $colorValue",
+                            "Updated time: $hourToUpdate:${processingStatus.changeAtMinutes.toString().padStart(2, '0')}, color: $colorValue",
                             applicationContext)
                     }
                 } catch (e: CancellationException) {
@@ -278,6 +281,7 @@ class ForegroundService : LifecycleService() {
         return LocalDateTime.now().hour
     }
 
+    @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     suspend fun getGSheetsService() : GSheetsService {
         val serviceAccountStream = applicationContext.assets
             .open("ServiceAccount.json")
@@ -357,11 +361,12 @@ class ForegroundService : LifecycleService() {
 
     fun findObjectNumberColumnIndex(
         objectNames: List<List<String>>,
-        hourToUpdate: Int): Int? {
+        hourToUpdate: Int,
+        minuteToUpdate: Int): Int? {
         for (value in objectNames.first().drop(1)) {
             if (value.isEmpty())
                 continue
-            if (value.startsWith("$hourToUpdate:00")) {
+            if (value.startsWith("$hourToUpdate:${minuteToUpdate.toString().padStart(2, '0')}")) {
                 return objectNames.first().indexOf(value)
             }
         }
@@ -375,6 +380,7 @@ class ForegroundService : LifecycleService() {
 
         val credentials = GoogleCredentials.fromStream(jsonStream)
             .createScoped(listOf("https://www.googleapis.com/auth/spreadsheets"))
+
         credentials.refreshIfExpired()
 
         return credentials.accessToken.tokenValue
