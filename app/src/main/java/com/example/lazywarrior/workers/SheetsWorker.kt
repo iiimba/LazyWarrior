@@ -1,19 +1,15 @@
 package com.example.lazywarrior.workers
 
 import android.Manifest
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.ServiceInfo
 import android.os.Build
-import android.os.PowerManager
-import android.os.PowerManager.PARTIAL_WAKE_LOCK
 import android.os.StrictMode
 import android.util.Log
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
-import androidx.core.app.ServiceCompat.startForeground
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
@@ -36,7 +32,6 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.io.InputStream
 import java.time.LocalDateTime
-import java.util.concurrent.TimeUnit
 import kotlin.coroutines.cancellation.CancellationException
 
 class SheetsWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -138,6 +133,7 @@ class SheetsWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
             waitTillStart(processingStatus.changeAtMinutes)
             val hourToUpdate = LocalDateTime.now().hour
+            //val hourToUpdate = 9
 
             val spreadsheetId = match.groupValues[1]
             val gSService = getGSheetsService()
@@ -182,7 +178,13 @@ class SheetsWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
             val color = container.processingStatusesRepository.getProcessingStatusColor()
             val colorValue = color ?: Colors.White.toString()
-            val objectNumberColumnIndex = findObjectNumberColumnIndex(data.body()!!.values, hourToUpdate, processingStatus.changeAtMinutes)
+            val objectNumberColumnIndex = findObjectNumberColumnIndex(
+                gSService,
+                spreadsheetId,
+                objectNumberRawIndex + 1,
+                data.body()!!.values,
+                hourToUpdate,
+                processingStatus.changeAtMinutes)
             if (objectNumberColumnIndex != null) {
                 updateCellBackgroundColor(
                     gSService,
@@ -197,8 +199,14 @@ class SheetsWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                     "Updated time: $hourToUpdate:00, color: $colorValue",
                     applicationContext)
             } else {
-                val objectNumberColumnIndex = findObjectNumberColumnIndex(data.body()!!.values, hourToUpdate, processingStatus.changeAtMinutes)
-                if (objectNumberColumnIndex == null) {
+                val previousObjectNumberColumnIndex = findObjectNumberColumnIndex(
+                    gSService,
+                    spreadsheetId,
+                    objectNumberRawIndex + 1,
+                    data.body()!!.values,
+                    hourToUpdate - 1,
+                    processingStatus.changeAtMinutes)
+                if (previousObjectNumberColumnIndex == null) {
                     makeStatusNotification(
                         "$hourToUpdate hours not found.",
                         applicationContext
@@ -210,13 +218,13 @@ class SheetsWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                     gSService,
                     spreadsheetId,
                     sheet.properties.sheetId,
-                    objectNumberRawIndex + 1,
-                    objectNumberColumnIndex + 1,
+                    objectNumberRawIndex,
+                    previousObjectNumberColumnIndex + 1,
                     colorValue
                 )
 
                 val updateValueRequest = UpdateValueRequest(listOf(listOf("$hourToUpdate:" + processingStatus.changeAtMinutes.toString().padStart(2, '0'))))
-                val rowLetter = getRowLetter(objectNumberColumnIndex)
+                val rowLetter = getRowLetter(previousObjectNumberColumnIndex - 1)
                 retryWithDelay {
                     gSService.updateValue(
                         spreadsheetId,
@@ -257,17 +265,61 @@ class SheetsWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val minutesToWait = (if (changeAtMinutes > dateTimeNow.minute) (changeAtMinutes - dateTimeNow.minute) else (60 - dateTimeNow.minute + changeAtMinutes)).toLong() + 1
 
         delay(minutesToWait * 60 * 1000)
+        //delay(10 * 1000)
     }
 
-    fun findObjectNumberColumnIndex(
-        objectNames: List<List<String>>,
+    suspend fun findObjectNumberColumnIndex(
+        gSService: GSheetsService,
+        spreadsheetId: String,
+        objectNumberRawIndex: Int,
+        timeValues: List<List<String>>,
         hourToUpdate: Int,
         minuteToUpdate: Int): Int? {
-        for (value in objectNames.first().drop(1)) {
-            if (value.isEmpty())
-                continue
-            if (value.startsWith("$hourToUpdate:${minuteToUpdate.toString().padStart(2, '0')}")) {
-                return objectNames.first().indexOf(value)
+        val indexes = timeValues.first()
+            .drop(2)
+            .indexesOf { !it.isEmpty() && it.startsWith("$hourToUpdate:${minuteToUpdate.toString().padStart(2, '0')}") }
+
+        if (indexes.size == 1) {
+//            if (indexes[0] == 23) {
+//                return 1
+//            }
+
+            return indexes[0] + 2
+        }
+
+        if (indexes.size > 1) {
+            indexes.forEach { index ->
+                if (index - 1 >= 0) {
+                    val indexToUpdateColor = findIndexToUpdateColor(
+                        gSService,
+                        spreadsheetId,
+                        objectNumberRawIndex,
+                        index - 1)
+
+                    if (indexToUpdateColor != null) {
+                        return indexToUpdateColor
+                    }
+                } else {
+                    val previousHour = if (hourToUpdate - 1 < 0) 23 else hourToUpdate - 1
+                    val indexesWithPreviousHour = timeValues.first()
+                        .drop(2)
+                        .indexesOf { !it.isEmpty() && it.startsWith("$previousHour:${minuteToUpdate.toString().padStart(2, '0')}") }
+
+                    if (!indexesWithPreviousHour.any()) {
+                        return null
+                    }
+
+                    val indexWithPreviousHour = indexesWithPreviousHour.last()
+                    val indexToUpdateColor = findIndexToUpdateColor(
+                        gSService,
+                        spreadsheetId,
+                        objectNumberRawIndex,
+                        indexWithPreviousHour)
+
+                    if (indexToUpdateColor != null) {
+                        return indexToUpdateColor
+                    }
+                }
             }
         }
 
@@ -394,11 +446,40 @@ class SheetsWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
     fun getRowLetter(objectNumberColumnIndex: Int): String {
         var result = ""
-        if (objectNumberColumnIndex > 26) {
-            result += "A"
+
+        val firstLetterIndex = (objectNumberColumnIndex + 2) / 26
+
+        if (firstLetterIndex > 0) {
+            result += alphabet[firstLetterIndex - 1]
         }
-        result += alphabet[objectNumberColumnIndex + 1]
+        result += alphabet[(objectNumberColumnIndex + 2) % 26]
 
         return result
+    }
+
+    fun <E> Iterable<E>.indexesOf(predicate: (E) -> Boolean) = mapIndexedNotNull { index, elem ->
+        index.takeIf { predicate(elem) }
+    }
+
+    suspend fun findIndexToUpdateColor(
+        gSService: GSheetsService,
+        spreadsheetId: String,
+        objectNumberRawIndex: Int,
+        index: Int) : Int? {
+        val range = getRowLetter(index)
+        val cellColumnColorResponse = retryWithDelay {
+            gSService.getCellColumnColor(
+                spreadsheetId,
+                range + objectNumberRawIndex,
+                "sheets(data(rowData(values(userEnteredFormat.backgroundColorStyle))))"
+            )
+        }
+
+        val backgroundColorStyle = cellColumnColorResponse.body()!!.sheets.single().data.single().rowData.single().values.single().userEnteredFormat.backgroundColorStyle
+        if ((backgroundColorStyle.rgbColor?.red == 1.0 && backgroundColorStyle.rgbColor.green == 1.0 && backgroundColorStyle.rgbColor.blue == 1.0) || backgroundColorStyle.themeColor == "BACKGROUND") {
+            return index + 2
+        }
+
+        return null
     }
 }

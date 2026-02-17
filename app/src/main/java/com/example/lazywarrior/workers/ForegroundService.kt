@@ -211,7 +211,7 @@ class ForegroundService : LifecycleService() {
                             gSService,
                             spreadsheetId,
                             sheet.properties.sheetId,
-                            objectNumberRawIndex + 1,
+                            objectNumberRawIndex,
                             objectNumberColumnIndex + 1,
                             colorValue
                         )
