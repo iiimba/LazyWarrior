@@ -122,6 +122,10 @@ class SheetsWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 return false
             }
 
+            if (LocalDateTime.parse(processingStatus.finishedAt) < LocalDateTime.now()) {
+                throw CancellationException("LazyWarrior finished work because finished date: ${processingStatus.finishedAt} has come")
+            }
+
             val regexWithGroup = Regex("https://docs.google.com/spreadsheets/d/([A-Za-z0-9-]+)[ ]*+")
             val match = regexWithGroup.find(processingStatus.excelDocumentUrl)
             if (match == null) {

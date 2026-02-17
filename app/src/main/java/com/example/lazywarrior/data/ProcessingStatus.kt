@@ -14,5 +14,6 @@ data class ProcessingStatus(
     val isRunning: Boolean,
     val color: String,
     val changeAtMinutes: Int,
-    val objectNumberAtColumn: Int
+    val objectNumberAtColumn: Int,
+    val finishedAt: String
 )

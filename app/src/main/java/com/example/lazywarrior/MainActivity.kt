@@ -2,6 +2,8 @@ package com.example.lazywarrior
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import android.os.Bundle
 import android.content.Intent
 import android.os.Build
@@ -27,16 +29,32 @@ import com.example.lazywarrior.workers.ForegroundService
 import java.time.LocalDateTime
 import android.net.Uri
 import android.provider.Settings
+import android.text.format.DateFormat
+import android.widget.DatePicker
+import android.widget.TextView
+import android.widget.TimePicker
 import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.lazywarrior.workers.SheetsWorker
+import java.time.LocalDate
+import java.time.Month
+import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), DatePickerDialog.OnDateSetListener, TimePickerDialog.OnTimeSetListener {
+
+    lateinit var textView: TextView
+    lateinit var button: Button
+    var myDay = 0
+    var myMonth: Int = 0
+    var myYear: Int = 0
+    var myHour: Int = 0
+    var myMinute: Int = 0
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,6 +73,8 @@ class MainActivity : AppCompatActivity() {
         val colorRed: RadioButton = findViewById(R.id.radio_color_red)
         val changeAtMinutes: Spinner = findViewById(R.id.change_at_minutes)
         val objectNumberAtColumn: Spinner = findViewById(R.id.object_number_at_column)
+        textView = findViewById(R.id.textView)
+        button = findViewById(R.id.btnPick)
         val startButton: Button = findViewById(R.id.start_button)
         val stopButton: Button = findViewById(R.id.stop_button)
 
@@ -124,9 +144,61 @@ class MainActivity : AppCompatActivity() {
         objectNumberAtColumn.setSelection(status?.objectNumberAtColumn ?: 0)
         objectNumberAtColumn.isEnabled = if (status == null) true else if (!status.isRunning) true else false
 
+        button.setOnClickListener {
+            val calendar: Calendar = Calendar.getInstance()
+
+            myDay = calendar.get(Calendar.DAY_OF_MONTH)
+            myMonth = calendar.get(Calendar.MONTH)
+            myYear = calendar.get(Calendar.YEAR)
+            val datePickerDialog =
+                DatePickerDialog(this@MainActivity, this@MainActivity, myYear, myMonth,myDay)
+            datePickerDialog.show()
+        }
+
+        if (status != null) {
+            val finishedAt = LocalDateTime.parse(status.finishedAt)
+            textView.text = "Year: " + finishedAt.year + " Month: " + finishedAt.month.value + " Day: " + finishedAt.dayOfMonth + " Hour: " + finishedAt.hour + " Minute: " + finishedAt.minute
+
+            val current = LocalDateTime.now()
+            val currentDate = LocalDateTime.of(current.year, current.month, current.dayOfMonth, 0, 0)
+            myYear = finishedAt.year
+            myMonth = finishedAt.month.value
+            myDay = finishedAt.dayOfMonth
+            myHour = finishedAt.hour
+            myMinute = finishedAt.minute
+            val tomorrowDate = currentDate.plusDays(1)
+            if (finishedAt < tomorrowDate) {
+                textView.error = "Select date and time al least for tomorrow"
+                textView.requestFocus()
+            }
+        }
+
         startButton.setOnClickListener {
             if (documentUrlInput.text.isEmpty() || !documentUrlInput.text.toString().startsWith("https://docs.google.com/spreadsheets/d/")) {
                 documentUrlInput.error = "Wrong format"
+                return@setOnClickListener
+            }
+
+            if (myYear == 0) {
+                textView.error = "Select date and time when finish work"
+                textView.requestFocus()
+                return@setOnClickListener
+            }
+
+            val finishedAt = LocalDateTime.of(
+                myYear,
+                myMonth,
+                myDay,
+                myHour,
+                myMinute
+            )
+
+            val current = LocalDateTime.now()
+            val currentDate = LocalDateTime.of(current.year, current.month, current.dayOfMonth, 0, 0)
+            val tomorrowDate = currentDate.plusDays(1)
+            if (finishedAt < tomorrowDate) {
+                textView.error = "Select date and time al least for tomorrow"
+                textView.requestFocus()
                 return@setOnClickListener
             }
 
@@ -141,7 +213,14 @@ class MainActivity : AppCompatActivity() {
                     true,
                     if (colorWhite.isChecked) Colors.White.toString() else Colors.Red.toString(),
                     changeAtMinutes.selectedItem as Int,
-                    alphabet.indexOf(objectNumberAtColumn.selectedItem.toString()))
+                    alphabet.indexOf(objectNumberAtColumn.selectedItem.toString()),
+                    LocalDateTime.of(
+                        myYear,
+                        myMonth,
+                        myDay,
+                        myHour,
+                        myMinute
+                    ).toString())
                 container.processingStatusesRepository.updateProcessingStatus(updatedProcessingStatus)
             }
             else {
@@ -154,7 +233,14 @@ class MainActivity : AppCompatActivity() {
                     true,
                     if (colorWhite.isChecked) Colors.White.toString() else Colors.Red.toString(),
                     changeAtMinutes.selectedItem as Int,
-                    alphabet.indexOf(objectNumberAtColumn.selectedItem.toString()))
+                    alphabet.indexOf(objectNumberAtColumn.selectedItem.toString()),
+                    LocalDateTime.of(
+                        myYear,
+                        myMonth,
+                        myDay,
+                        myHour,
+                        myMinute
+                    ).toString())
                 container.processingStatusesRepository.insertProcessingStatus(newProcessingStatus)
             }
             documentUrlInput.isEnabled = false
@@ -162,6 +248,7 @@ class MainActivity : AppCompatActivity() {
             objectListInput.isEnabled = false
             changeAtMinutes.isEnabled = false
             objectNumberAtColumn.isEnabled = false
+            button.isEnabled = false
             startButton.isEnabled = false
             stopButton.isEnabled = true
 
@@ -189,6 +276,7 @@ class MainActivity : AppCompatActivity() {
             objectListInput.isEnabled = true
             changeAtMinutes.isEnabled = true
             objectNumberAtColumn.isEnabled = true
+            button.isEnabled = true
             startButton.isEnabled = true
             stopButton.isEnabled = false
 
@@ -214,5 +302,45 @@ class MainActivity : AppCompatActivity() {
                 startActivity(intent)
             }
         }
+    }
+
+    override fun onDateSet(view: DatePicker?, year: Int, month: Int, dayOfMonth: Int) {
+        myDay = dayOfMonth
+        myYear = year
+        myMonth = month
+        val calendar: Calendar = Calendar.getInstance()
+        myHour = calendar.get(Calendar.HOUR)
+        myMinute = calendar.get(Calendar.MINUTE)
+        val timePickerDialog = TimePickerDialog(this@MainActivity, this@MainActivity, myHour, myMinute,
+            DateFormat.is24HourFormat(this))
+        timePickerDialog.show()
+    }
+
+    override fun onTimeSet(view: TimePicker?, hourOfDay: Int, minute: Int) {
+        myHour = hourOfDay
+        myMinute = minute
+        myMonth += 1
+
+        val finishedAt = LocalDateTime.of(
+            myYear,
+            myMonth,
+            myDay,
+            myHour,
+            myMinute
+        )
+
+        textView.text = "Year: " + myYear + " Month: " + myMonth + " Day: " + myDay + " Hour: " + myHour + " Minute: " + myMinute
+        
+        val current = LocalDateTime.now()
+        val currentDate = LocalDateTime.of(current.year, current.month, current.dayOfMonth, 0, 0)
+        val tomorrowDate = currentDate.plusDays(1)
+        if (finishedAt < tomorrowDate) {
+            textView.error = "Select date and time al least for tomorrow"
+            textView.requestFocus()
+            return
+        }
+
+        textView.error = null
+        textView.clearFocus()
     }
 }

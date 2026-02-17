@@ -8,7 +8,7 @@ import androidx.room.RoomDatabase
 /**
  * Database class with a singleton Instance object.
  */
-@Database(entities = [ProcessingStatus::class], version = 4, exportSchema = false)
+@Database(entities = [ProcessingStatus::class], version = 5, exportSchema = false)
 abstract class MainDatabase : RoomDatabase() {
     abstract fun processingStatusDao(): ProcessingStatusDao
 
