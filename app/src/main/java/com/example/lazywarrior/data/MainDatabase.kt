@@ -8,9 +8,10 @@ import androidx.room.RoomDatabase
 /**
  * Database class with a singleton Instance object.
  */
-@Database(entities = [ProcessingStatus::class], version = 5, exportSchema = false)
+@Database(entities = [ProcessingStatus::class, ErrorLog::class], version = 6, exportSchema = false)
 abstract class MainDatabase : RoomDatabase() {
     abstract fun processingStatusDao(): ProcessingStatusDao
+    abstract fun errorLogDao(): ErrorLogDao
 
     companion object {
         @Volatile

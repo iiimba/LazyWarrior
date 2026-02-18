@@ -93,4 +93,19 @@
         android:layout_width="200dp"
         android:layout_height="wrap_content"
         android:text="Stop" />
+
+    <EditText
+        android:id="@+id/multiline_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:inputType="textMultiLine"
+        android:gravity="top"
+        android:minLines="4" />
+
+    <Button
+        android:id="@+id/show_logs_button"
+        android:layout_width="200dp"
+        android:layout_height="wrap_content"
+        android:text="Show logs" />
+
 </LinearLayout>

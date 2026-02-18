@@ -77,6 +77,8 @@ class MainActivity : AppCompatActivity(), DatePickerDialog.OnDateSetListener, Ti
         button = findViewById(R.id.btnPick)
         val startButton: Button = findViewById(R.id.start_button)
         val stopButton: Button = findViewById(R.id.stop_button)
+        val multilineInput: EditText = findViewById(R.id.multiline_input)
+        val showLogsButton: Button = findViewById(R.id.show_logs_button)
 
         documentUrlInput.setText(status?.excelDocumentUrl)
         documentUrlInput.addTextChangedListener(object : TextWatcher {
@@ -286,6 +288,13 @@ class MainActivity : AppCompatActivity(), DatePickerDialog.OnDateSetListener, Ti
 //            stopService(serviceIntent)
         }
         stopButton.isEnabled = if (status == null) false else if (!status.isRunning) false else true
+
+        showLogsButton.setOnClickListener {
+            val logs = container.errorLogsRepository.getErrorLogs()
+            multilineInput.setText(logs.map {
+                "${it.atTime}, ${it.errorMessage}"
+            }.joinToString(separator = "\n"))
+        }
     }
 
     private fun requestBatteryOptimizationExemption() {

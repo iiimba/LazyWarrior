@@ -22,6 +22,8 @@ import com.example.lazywarrior.data.AppContainer
 import com.example.lazywarrior.data.AppDataContainer
 import com.example.lazywarrior.data.ColorRgb
 import com.example.lazywarrior.data.Colors
+import com.example.lazywarrior.data.ErrorLog
+import com.example.lazywarrior.data.ErrorLogDao
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.gson.GsonBuilder
 import kotlinx.coroutines.Dispatchers
@@ -74,6 +76,11 @@ class SheetsWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                     return@withContext Result.success()
                 }
             } catch (e: CancellationException) {
+                val container: AppContainer = AppDataContainer(applicationContext)
+                container.errorLogsRepository.insert(
+                    ErrorLog(0,
+                        LocalDateTime.now().toString(),
+                        e.message.toString()))
                 makeStatusNotification(
                     "Cancelled, with message: ${e.message.toString()}",
                     applicationContext)
@@ -98,8 +105,8 @@ class SheetsWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     suspend fun updateCellHourStatus() : Boolean {
+        val container: AppContainer = AppDataContainer(applicationContext)
         try {
-            val container: AppContainer = AppDataContainer(applicationContext)
             val processingStatus = container.processingStatusesRepository.getLastProcessingStatus()
             if (processingStatus == null) {
                 makeStatusNotification(
@@ -238,6 +245,10 @@ class SheetsWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                     applicationContext)
             }
         } catch (throwable: Throwable) {
+            container.errorLogsRepository.insert(
+                ErrorLog(0,
+                    LocalDateTime.now().toString(),
+                    throwable.message.toString()))
             makeStatusNotification(
                 "Another error: ${throwable.message}",
                 applicationContext
@@ -249,13 +260,16 @@ class SheetsWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             )
             return false
         } catch (e: Exception) {
+            container.errorLogsRepository.insert(
+                ErrorLog(0,
+                    LocalDateTime.now().toString(),
+                    e.message.toString()))
             makeStatusNotification(
                 "Error: ${e.message}",
                 applicationContext
             )
             return false
         }
-
 
         return true
     }

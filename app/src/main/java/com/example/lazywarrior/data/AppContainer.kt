@@ -7,6 +7,8 @@ import android.content.Context
  */
 interface AppContainer {
     val processingStatusesRepository: ProcessingStatusesRepository
+
+    val errorLogsRepository: ErrorLogsRepository
 }
 
 /**
@@ -20,5 +22,10 @@ class AppDataContainer(private val context: Context) : AppContainer {
     override val processingStatusesRepository: ProcessingStatusesRepository by lazy {
         OfflineProcessingStatusesRepository(
             MainDatabase.getDatabase(context).processingStatusDao())
+    }
+
+    override val errorLogsRepository: ErrorLogsRepository by lazy {
+        OfflineErrorLogsRepository(
+            MainDatabase.getDatabase(context).errorLogDao())
     }
 }
